@@ -1,0 +1,3 @@
+﻿  Store.cpp
+C:\Store\Store\Store.cpp(274,1): warning C4715: Balance: значение возвращается не при всех путях выполнения
+  Store.vcxproj -> C:\Store\x64\Debug\Store.exe

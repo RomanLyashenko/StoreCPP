@@ -21,6 +21,7 @@ struct Product {
     string description; // Описание
     int availableAmount; // Доступное количество
     float price = 0.0f; // Цена
+    string category; // Категория товара
 };
 
 // Функция для записи данных о товаре в файл
@@ -32,6 +33,7 @@ void WriteProductToFile(ofstream& file, const Product& product) {
     file << product.description << endl;
     file << product.availableAmount << endl;
     file << product.price << endl;
+    file << product.category << endl;
 }
 
 // Функция для чтения данных о товаре из файла
@@ -74,7 +76,7 @@ void RenameFile(const string& oldName, const string& newName);
 void ForSellers();
 void PutAProductUpForSale();
 void PersonalAccount();
-void DeleteProduct(const string& sellerName, const string& category);
+void DeleteProduct(string& category, string productName);
 void Shopping();
 
 int main() {
@@ -211,7 +213,7 @@ bool LogIn(const string& path) {
     if (array == nullptr) return false;
 
     // Счетчик попыток
-    int attempts = 3;
+    int attempts = 4;
     while (attempts > 0) {
         for (int i = 0; i < size; i++) {
             size_t pos = array[i].find(" : ");
@@ -220,10 +222,11 @@ bool LogIn(const string& path) {
                     NAME = Name;
                     delete[] array;
                     return true;
+                    break;
                 }
             }
         }
-        cout << "Неверный пароль. Попробуйте снова. Осталось попыток: " << attempts << endl;
+        cout << "Неверный пароль. Попробуйте снова. Осталось попыток: " << attempts-1 << endl;
         cout << "Введите пароль: ";
         cin >> Password;
         attempts--;
@@ -487,14 +490,10 @@ void RenameFile(const string& oldName, const string& newName) {
 
 }
 
-// Функция для управления товарами продавца
+// Функция для продавцов
 void ForSellers() {
-    string sellerName, category;
+    string category;
     int action;
-    cout << "Введите имя продавца: ";
-    cin >> sellerName;
-    cout << "Введите категорию товара: ";
-    cin >> category;
     do {
         cout << "Выберите действие:" << endl;
         cout << "1. Добавить товар" << endl;
@@ -503,13 +502,118 @@ void ForSellers() {
         cout << "0. Выход" << endl;
         cout << "Ваш выбор: ";
         cin >> action;
+        cout << endl;
         switch (action) {
         case 1:
             PutAProductUpForSale();
             break;
-        case 2:
-            DeleteProduct(NAME, category);
-            break;
+        case 2: { // Блок для обработки удаления товара
+            string productName;
+            cout << "Введите название товара: ";
+            cin.ignore();
+            getline(cin, productName);
+
+            string productCategory;
+            cout << "Введите категорию товара: ";
+            getline(cin, productCategory);
+
+            // Считываем данные о товарах продавца
+            ifstream sellerFile("Sellers/" + NAME + ".txt");
+                if (!sellerFile.is_open()) {
+                    cout << "Ошибка открытия файла продавца." << endl;
+                    break; // Выходим из блока, если не удалось открыть файл
+                }
+
+            bool productFound = false;
+            string line;
+            Product product;
+
+            // Считываем информацию о товаре до разделителя "-----"
+            while (getline(sellerFile, line) && line != "-----") {
+                // Считываем данные товара
+                if (product.seller.empty()) {
+                    product.seller = line;
+                }
+                else if (product.name.empty()) {
+                    product.name = line;
+                }
+                else if (product.producer.empty()) {
+                    product.producer = line;
+                }
+                else if (product.year.empty()) {
+                    product.year = line;
+                }
+                else if (product.description.empty()) {
+                    product.description = line;
+                }
+                else if (product.availableAmount == 0) {
+                    product.availableAmount = stoi(line);
+                }
+                else if (product.price == 0.0f) {
+                    product.price = stof(line);
+                }
+                else {
+                    product.category = line; // Считываем категорию
+                }
+
+                // Если товар найден, удаляем его
+                if (product.name == productName && product.category == productCategory) {
+                    DeleteProduct(productCategory, productName);
+                    productFound = true;
+                    break;
+                }
+            }
+
+            // Если "-----" встречен, продолжаем поиск
+            if (line == "-----") {
+                while (getline(sellerFile, line)) {
+                    if (line == "-----") {
+                        product = Product(); // Очищаем структуру
+                        continue; // Пропускаем разделитель
+                    }
+
+                    // Считываем данные товара
+                    if (product.seller.empty()) {
+                        product.seller = line;
+                    }
+                    else if (product.name.empty()) {
+                        product.name = line;
+                    }
+                    else if (product.producer.empty()) {
+                        product.producer = line;
+                    }
+                    else if (product.year.empty()) {
+                        product.year = line;
+                    }
+                    else if (product.description.empty()) {
+                        product.description = line;
+                    }
+                    else if (product.availableAmount == 0) {
+                        product.availableAmount = stoi(line);
+                    }
+                    else if (product.price == 0.0f) {
+                        product.price = stof(line);
+                    }
+                    else {
+                        product.category = line; // Считываем категорию
+                    }
+
+                    // Если товар найден, удаляем его
+                    if (product.name == productName && product.category == productCategory) {
+                        DeleteProduct(productCategory, productName);
+                        productFound = true;
+                        break;
+                    }
+                }
+            }
+
+            sellerFile.close();
+
+            if (!productFound) {
+                cout << "Товар не найден." << endl;
+            }
+            break; // Выход из блока удаления товара
+        }
         case 3:
             PersonalAccount();
             break;
@@ -522,80 +626,187 @@ void ForSellers() {
         }
     } while (action != 0);
 }
-
 // Функция для выставки товара на продажу
 void PutAProductUpForSale() {
     Product product;
-    cout << "Введите информацию о товаре:" << endl;
-    cout << "Имя продавца: ";
-    cin >> product.seller;
-    cout << "Название товара: ";
-    cin >> product.name;
-    cout << "Производитель: ";
-    cin >> product.producer;
-    cout << "Год выпуска: ";
-    cin >> product.year;
-    cout << "Описание: ";
-    cin.ignore(); // Считываем остаток символа новой строки из буфера
-    getline(cin, product.description);
-    cout << "Доступное количество: ";
-    cin >> product.availableAmount;
-    cout << "Цена: ";
-    cin >> product.price;
 
-    // Записываем товар в файл категории
-    string categoryFileName = "Categories/" + product.name + ".txt";
-    ofstream outCategories(categoryFileName, ios::app);
+    // Выбор категории
+    int categoryChoice;
+    cout << "\t*Выберите категорию вашего товара*" << endl;
+    cout << "1. Еда" << endl;
+    cout << "2. Одежда и обувь" << endl;
+    cout << "3. Техника" << endl;
+    cout << "4. Медицина" << endl;
+    cout << "5. Предметы личной гигиены" << endl;
+    cout << "6. Книги" << endl;
+    cout << "7. Аксессуары" << endl;
+    cout << "8. Предметы роскоши" << endl;
+    cout << "9. Строительство и ремонт" << endl;
+    cout << "10. Транспорт и запчасти" << endl;
+    cout << "11. Зоотовары" << endl;
+    cout << "12. Иное" << endl;
+    cout << "Ваш выбор: ";
+    do {
+        cin >> categoryChoice;
+    } while (categoryChoice < 1 || categoryChoice > 12);
+    cin.ignore(); // Игнорировать оставшуюся строку
+
+    // Получение информации о товаре
+    cout << "Введите название товара: ";
+    getline(cin, product.name);
+    cout << "Введите производителя: ";
+    getline(cin, product.producer);
+    cout << "Введите год выпуска/производства товара: ";
+    getline(cin, product.year);
+    cout << "Описание товара: ";
+    getline(cin, product.description);
+    cout << "Введите количество товара (штук): ";
+    cin >> product.availableAmount;
+    do {
+        cout << "Введите цену товара: ";
+        cin >> product.price;
+    } while (product.price < 0);
+
+    // Настройка категории
+    switch (categoryChoice) {
+    case 1: product.category = "Еда"; break;
+    case 2: product.category = "Одежда и обувь"; break;
+    case 3: product.category = "Техника"; break;
+    case 4: product.category = "Медицина"; break;
+    case 5: product.category = "Предметы личной гигиены"; break;
+    case 6: product.category = "Книги"; break;
+    case 7: product.category = "Аксессуары"; break;
+    case 8: product.category = "Предметы роскоши"; break;
+    case 9: product.category = "Строительство и ремонт"; break;
+    case 10: product.category = "Транспорт и запчасти"; break;
+    case 11: product.category = "Зоотовары"; break;
+    case 12: product.category = "Иное"; break;
+    }
+
+    // Запись данных в файл
+    product.seller = NAME; // Заполняем продавца
+
+    ofstream outSellers("Sellers/" + NAME + ".txt", ios::app); 
+    if (outSellers.is_open()) {
+        WriteProductToFile(outSellers, product);
+        outSellers << "-----" << endl;
+        outSellers.close();
+    }
+    else {
+        cout << "Ошибка при открытии файла для записи!" << endl;
+    }
+
+    // Запись в категорию
+    ofstream outCategories("Categories/" + product.category + ".txt", ios::app); 
     if (outCategories.is_open()) {
         WriteProductToFile(outCategories, product);
+        outCategories << "-----" << endl;
         outCategories.close();
-        cout << "Товар добавлен в категорию." << endl;
+        cout << "Товар успешно сохранён." << endl;
     }
     else {
-        cout << "Ошибка открытия файла категории." << endl;
-    }
-
-    // Записываем товар в файл продавца
-    string sellerFileName = "Sellers/" + product.seller + ".txt";
-    ofstream outSellers(sellerFileName, ios::app);
-    if (outSellers.is_open()) {
-        WriteProductToFile(outSellers, product); // Используем функцию WriteProductToFile
-        outSellers.close();
-        cout << "Товар добавлен в файл продавца." << endl;
-    }
-    else {
-        cout << "Ошибка открытия файла продавца." << endl;
+        cout << "Ошибка при открытии файла для записи!" << endl;
     }
 }
 
 // Функция для личного кабинета продавца
 void PersonalAccount() {
-    Product product = ReadProductFromFile("Sellers(" + NAME + ").txt");
-    if (!product.name.empty()) {
-        cout << "Ваши товары:" << endl;
-        cout << "Название: " << product.name << endl;
-        cout << "Производитель: " << product.producer << endl;
-        cout << "Год выпуска: " << product.year << endl;
-        cout << "Описание: " << product.description << endl;
-        cout << "Количество на складе: " << product.availableAmount << endl;
-        cout << "Цена: " << product.price << endl;
+    string filename = "Sellers/" + NAME + ".txt"; //  NAME должна быть определена ранее
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cout << "Ошибка открытия файла продавца." << endl;
+        return;
     }
-    else {
+
+    bool hasProducts = false; // Флаг, чтобы отслеживать, есть ли товары
+    string seller;
+    string name;
+    string producer;
+    string year;
+    string description;
+    int availableAmount = 0;
+    float price = 0.0f;
+    string category;
+
+    string line;
+    while (getline(file, line)) {
+        if (line == "-----") {
+            if (!name.empty()) { // Проверяем, что товар не пустой
+                hasProducts = true; // Устанавливаем флаг, что есть товары
+                cout << "-------------------------" << endl;
+                cout << "Название: " << name << endl;
+                cout << "Производитель: " << producer << endl;
+                cout << "Год выпуска: " << year << endl;
+                cout << "Описание: " << description << endl;
+                cout << "Количество: " << availableAmount << endl;
+                cout << "Цена: " << price << endl;
+                cout << "Категория: " << category << endl;
+            }
+
+            // Очищаем переменные для следующего товара
+            seller.clear();
+            name.clear();
+            producer.clear();
+            year.clear();
+            description.clear();
+            availableAmount = 0;
+            price = 0.0f;
+            category.clear();
+
+            continue; // Пропускаем разделитель
+        }
+
+        if (seller.empty()) { // Считываем продавца только в начале
+            seller = line;
+        }
+        else if (name.empty()) {
+            name = line;
+        }
+        else if (producer.empty()) {
+            producer = line;
+        }
+        else if (year.empty()) {
+            year = line;
+        }
+        else if (description.empty()) {
+            description = line;
+        }
+        else if (availableAmount == 0) { // Считываем количество
+            availableAmount = stoi(line);
+        }
+        else if (price == 0.0f) { // Считываем цену
+            price = stof(line);
+        }
+        else { // Считываем категорию
+            category = line;
+        }
+    }
+
+    if (!name.empty()) { // Проверяем последний товар
+        hasProducts = true; // Устанавливаем флаг, что есть товары
+        cout << "-------------------------" << endl;
+        cout << "Название: " << name << endl;
+        cout << "Производитель: " << producer << endl;
+        cout << "Год выпуска: " << year << endl;
+        cout << "Описание: " << description << endl;
+        cout << "Количество: " << availableAmount << endl;
+        cout << "Цена: " << price << endl;
+        cout << "Категория: " << category << endl;
+    }
+
+    file.close();
+    if (!hasProducts) {
         cout << "У вас нет товаров." << endl;
     }
 }
 
 // Функция для удаления товара
-void DeleteProduct(const string& sellerName, const string& category) {
-    string productName;
-    cout << "Введите название товара: ";
-    cin.ignore();
-    getline(cin, productName);
-
+void DeleteProduct(string& category, string productName) {
     // Удаление товара из файла категории
-    string categoryFileName = "Categories(" + category + ").txt";
+    string categoryFileName = "Categories/" + category + ".txt";
     string tempFile = "temp.txt";
-    ifstream inCategories(categoryFileName);
+    ifstream inCategories;
+    inCategories.open(categoryFileName);
     if (!inCategories.is_open()) {
         cout << "Ошибка открытия файла категории." << endl;
         return;
@@ -605,23 +816,24 @@ void DeleteProduct(const string& sellerName, const string& category) {
         cout << "Ошибка при создании временного файла." << endl;
         return;
     }
-    Product product;
+
     bool productFound = false;
     string line;
-        while (getline(inCategories, line)) {
-            if (line == "-----") { // Проверяем разделитель
-                outTemp << line << endl;
-                continue;
-            }
-            if (line == productName) { // Проверяем название товара
-                productFound = true;
-            }
-            else {
-                outTemp << line << endl; // Записываем строку в временный файл
-            }
+    while (getline(inCategories, line)) {
+        if (line == "-----") { // Проверяем разделитель
+            outTemp << line << endl;
+            continue;
         }
+        if (line == productName) { // Проверяем название товара
+            productFound = true;
+        }
+        else {
+            outTemp << line << endl; // Записываем строку в временный файл
+        }
+    }
     inCategories.close();
     outTemp.close();
+
     if (productFound) {
         remove(categoryFileName.c_str());
         RenameFile(tempFile.c_str(), categoryFileName.c_str());
@@ -633,7 +845,7 @@ void DeleteProduct(const string& sellerName, const string& category) {
     remove(tempFile.c_str());
 
     // Удаление товара из файла продавца
-    string sellerFileName = "Sellers(" + sellerName + ").txt";
+    string sellerFileName = "Sellers/" + NAME + ".txt";
     tempFile = "temp.txt";
     ifstream inSeller(sellerFileName);
     if (!inSeller.is_open()) {
@@ -645,6 +857,7 @@ void DeleteProduct(const string& sellerName, const string& category) {
         cout << "Ошибка при создании временного файла." << endl;
         return;
     }
+
     productFound = false;
     while (getline(inSeller, line)) {
         if (line == "-----") { // Проверяем разделитель
@@ -655,12 +868,12 @@ void DeleteProduct(const string& sellerName, const string& category) {
             productFound = true;
         }
         else {
-            outTemp << line
-                << endl; // Записываем строку в временный файл
+            outTemp << line << endl; // Записываем строку в временный файл
         }
     }
     inSeller.close();
     outTemp.close();
+
     if (productFound) {
         remove(sellerFileName.c_str());
         RenameFile(tempFile.c_str(), sellerFileName.c_str());
@@ -671,6 +884,7 @@ void DeleteProduct(const string& sellerName, const string& category) {
     }
     remove(tempFile.c_str());
 }
+
 // Функция для покупок
 void Shopping() {
     int choose;
@@ -764,7 +978,7 @@ void Shopping() {
                 }
                 if (productRemoved) {
                     // Удаляем товар из файла продавца, если количество равно 0
-                    DeleteProduct(product.seller, category);
+                    DeleteProduct(category, product.name);
                 }
             }
             else {

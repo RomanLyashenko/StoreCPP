@@ -1156,5 +1156,5 @@ void Basket() {
         }
         basketFile.close();
     }
-    // Shopping(); // Возможно, вам нужно добавить сюда вызов функции Shopping()
+ Shopping(); 
 }

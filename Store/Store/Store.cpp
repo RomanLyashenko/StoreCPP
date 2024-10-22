@@ -6,7 +6,7 @@
 using namespace std;
 
 string NAME = "";
-float BALANCE;
+float BALANCE=0.0f;
 string CARDNUMBER = "";
 string path = "Data.txt";
 string path2 = "Cards.txt";
@@ -19,7 +19,7 @@ struct Product {
     string producer; // Производитель
     string year; // Год выпуска
     string description; // Описание
-    int availableAmount; // Доступное количество
+    int availableAmount = 0; // Доступное количество
     float price = 0.0f; // Цена
     string category; // Категория товара
 };
@@ -36,26 +36,80 @@ void WriteProductToFile(ofstream& file, const Product& product) {
     file << product.category << endl;
 }
 
-// Функция для чтения данных о товаре из файла
-Product ReadProductFromFile(const string& filename) {
-    Product product;
-    ifstream file(filename);
-    if (file.is_open()) {
-        getline(file, product.seller);
-        getline(file, product.name);
-        getline(file, product.producer);
-        file >> product.year;
-        file.ignore(); // Пропускаем символ новой строки
-        getline(file, product.description);
-        file >> product.availableAmount;
-        file.ignore(); // Пропускаем символ новой строки
-        file >> product.price;
-        file.close();
+bool ReadProductFromFile(ifstream& inFile, Product& product) {
+    string line;
+    if (getline(inFile, product.seller)) {
+        cout << "seller: " << product.seller << endl; // Добавлен cout для отладки
+        // ... остальной код ... 
+        getline(inFile, line); // Считываем строку с количеством
+        cout << "line: " << line << endl; // Добавлен cout для отладки
+        // ... остальной код ... 
+        getline(inFile, line); // Считываем строку с ценой
+        cout << "line: " << line << endl; // Добавлен cout для отладки
+        // ... остальной код ...
+        getline(inFile, product.category);
+        cout << "category: " << product.category << endl; // Добавлен cout для отладки
+        return true;
     }
-    else {
-        cout << "Ошибка открытия файла: " << filename << endl;
+    return false;
+}
+
+// Структура для представления товара из файла basket
+struct Product2 {
+    string seller;
+    string name;
+    string producer;
+    string year;
+    string description;
+    int availableAmount;
+    float price;
+    string category;
+    int quantity; // Количество товара в корзине
+};
+
+// Функция для чтения данных о товаре из файла basket
+bool ReadProductFromFile2(ifstream& inFile, Product2& product) {
+    string line;
+    if (getline(inFile, product.seller)) {
+        getline(inFile, product.name);
+        getline(inFile, product.producer);
+        getline(inFile, product.year);
+        getline(inFile, product.description);
+        getline(inFile, line); // Считываем строку с количеством
+        line.erase(remove_if(line.begin(), line.end(), isspace),
+            remove_if(line.begin(), line.end(), isspace));
+        if (!line.empty()) {
+            try {
+                product.availableAmount = stoi(line);
+            }
+            catch (const exception&) {
+                return false; // Пропускаем товар
+            }
+        }
+        else {
+            return false; // Пропускаем товар
+        }
+        getline(inFile, line); // Считываем строку с ценой
+        line.erase(remove_if(line.begin(), line.end(), isspace),
+            remove_if(line.begin(), line.end(), isspace));
+        if (!line.empty()) {
+            try {
+                product.price = stof(line);
+            }
+            catch (const exception&) {
+                return false; // Пропускаем товар
+            }
+        }
+        else {
+            return false; // Пропускаем товар
+        }
+        getline(inFile, product.category);
+        // Считываем количество товара
+        getline(inFile, line);
+        product.quantity = stoi(line); // Добавляем количество товара в структуру
+        return true;
     }
-    return product;
+    return false;
 }
 
 void StartOfTheProgramm(string& path);
@@ -78,11 +132,11 @@ void PutAProductUpForSale();
 void PersonalAccount();
 void DeleteProduct(string& category, string productName);
 void Shopping();
+void Basket();
 
 int main() {
     SetConsoleTitleA("\t\tG A Z O N");
     // Русский язык
-    setlocale(LC_ALL, "RU");
     SetConsoleCP(1251);
     SetConsoleOutputCP(1251);
 
@@ -885,106 +939,222 @@ void DeleteProduct(string& category, string productName) {
     remove(tempFile.c_str());
 }
 
-// Функция для покупок
+// Функция для обновления количества товара в файле
+void UpdateProductAmount(const string& filename, const Product& product, int amount) {
+    ifstream inFile(filename);
+    ofstream outFile(filename + ".tmp");
+    Product currentProduct;
+
+    if (inFile.is_open() && outFile.is_open()) {
+        while (ReadProductFromFile(inFile, currentProduct)) {
+            if (currentProduct.name == product.name &&
+                currentProduct.producer == product.producer &&
+                currentProduct.year == product.year &&
+                currentProduct.category == product.category) {
+                currentProduct.availableAmount -= amount;
+            }
+            WriteProductToFile(outFile, currentProduct);
+            outFile << "-----" << endl;
+        }
+        inFile.close();
+        outFile.close();
+        remove(filename.c_str());
+        RenameFile((filename + ".tmp").c_str(), filename.c_str());
+    }
+    else {
+            cout << "Ошибка при открытии файла " << filename << endl;
+    }
+}
+
+
+// Функция для покупки товаров
 void Shopping() {
-    int choose;
-    cout << "\t*Выберите категорию*" << endl << "1. Еда" << endl
-        << "2. Одежда и обувь" << endl << "3. Техника" << endl
-        << "4. Медицина" << endl << "5. Предметы личной гигиены" << endl
-        << "6. Книги" << endl << "7. Аксессуары" << endl
-        << "8. Предметы роскоши" << endl << "9. Строительство и ремонт" << endl
-        << "10. Транспорт и запчасти" << endl << "11. Зоотовары" << endl
-        << "12. Иное" << endl << "Ваш выбор: ";
+    // Выбор категории
+    int categoryChoice;
+    cout << "\t*Выберите категорию товара*" << endl;
+    cout << "1. Еда" << endl;
+    cout << "2. Одежда и обувь" << endl;
+    cout << "3. Техника" << endl;
+    cout << "4. Медицина" << endl;
+    cout << "5. Предметы личной гигиены" << endl;
+    cout << "6. Книги" << endl;
+    cout << "7. Аксессуары" << endl;
+    cout << "8. Предметы роскоши" << endl;
+    cout << "9. Строительство и ремонт" << endl;
+    cout << "10. Транспорт и запчасти" << endl;
+    cout << "11. Зоотовары" << endl;
+    cout << "12. Иное" << endl;
+    cout << "Ваш выбор: ";
     do {
-        cin >> choose;
-    } while (choose < 1 || choose > 12);
-    string category;
-    switch (choose) {
-    case 1: category = "Еда"; break;
-    case 2: category = "Одежда и обувь"; break;
-    case 3: category = "Техника"; break;
-    case 4: category = "Медицина"; break;
-    case 5: category = "Предметы личной гигиены"; break;
-    case 6: category = "Книги"; break;
-    case 7: category = "Аксессуары"; break;
-    case 8: category = "Предметы роскоши"; break;
-    case 9: category = "Строительство и ремонт"; break;
-    case 10: category = "Транспорт и запчасти"; break;
-    case 11: category = "Зоотовары"; break;
-    case 12: category = "Иное"; break;
-    }
-    string categoryFileName = "Categories(" + category + ").txt";
-    ifstream inCategories(categoryFileName);
-    if (!inCategories.is_open()) {
-        cout << "Ошибка открытия файла категории." << endl;
-        return;
-    }
-    string line;
-    while (getline(inCategories, line)) {
-        if (line.empty() || line == "-----") continue;
-        Product product = ReadProductFromFile(categoryFileName);
-        cout << "\nНазвание товара: " << product.name << endl
-            << "Продавец: " << product.seller << endl
-            << "Производитель: " << product.producer << endl
-            << "Год выпуска: " << product.year << endl
-            << "Описание: " << product.description << endl
-            << "Доступно: " << product.availableAmount << ", Цена: " << product.price << endl;
-        int amountToAdd;
-        int choise;
-        do {
-            cout << "Добавить товар в корзину?" << endl << "Да [нажмите 1]" << endl << "Нет [нажмите 0]: ";
-            cin >> choise;
-        } while (choise > 1 || choise < 0);
-        if (choise) {
-            cout << "Введите количество для добавления в корзину: ";
-            cin >> amountToAdd;
-            if (amountToAdd <= product.availableAmount) {
-                product.availableAmount -= amountToAdd;
-                bool productRemoved = (product.availableAmount == 0); // Флаг, чтобы проверить, нужно ли удалить продукт
-                // Обновляем файл категории
-                string tempFile = "temp.txt";
-                ofstream outTemp(tempFile);
-                if (!outTemp.is_open()) {
-                    cout << "Ошибка при создании временного файла." << endl;
-                    return;
-                }
-                inCategories.clear();
-                inCategories.seekg(0);
-                while (getline(inCategories, line)) {
-                    if (line.empty() || line == "-----") {
-                        outTemp << line << endl;
-                        continue;
-                    }
-                    product = ReadProductFromFile(categoryFileName); // Считываем продукт из файла
-                    WriteProductToFile(outTemp, product); // Записываем обновленный продукт
-                }
-                inCategories.close();
-                outTemp.close();
-                remove(categoryFileName.c_str());
-                RenameFile(tempFile.c_str(), categoryFileName.c_str());
-                // Запись в корзину
-                ofstream outBasket("Baskets/" + NAME + ".txt", ios::app);
-                if (outBasket.is_open()) {
-                    float totalCost = amountToAdd * product.price;
-                    outBasket << "Название товара: " << product.name << endl
-                        << "Количество: " << amountToAdd << endl
-                        << "Цена: " << product.price << endl
-                        << "Итоговая стоимость: " << totalCost << endl
-                        << "-------------" << endl;
-                    outBasket.close();
+        cin >> categoryChoice;
+    } while (categoryChoice < 1 || categoryChoice > 12);
+    cin.ignore();
+
+    // Создание имени файла с использованием текстового названия категории
+    string categoryFilename;
+        switch (categoryChoice) {
+        case 1: categoryFilename = "Categories/Еда.txt"; break;
+        case 2: categoryFilename = "Categories/Одежда и обувь.txt"; break;
+        case 3: categoryFilename = "Categories/Техника.txt"; break;
+        case 4: categoryFilename = "Categories/Медицина.txt"; break;
+        case 5: categoryFilename = "Categories/Предметы личной гигиены.txt"; break;
+        case 6: categoryFilename = "Categories/Книги.txt"; break;
+        case 7: categoryFilename = "Categories/Аксессуары.txt"; break;
+        case 8: categoryFilename = "Categories/Предметы роскоши.txt"; break;
+        case 9: categoryFilename = "Categories/Строительство и ремонт.txt"; break;
+        case 10: categoryFilename = "Categories/Транспорт и запчасти.txt"; break;
+        case 11: categoryFilename = "Categories/Зоотовары.txt"; break;
+        case 12: categoryFilename = "Categories/Иное.txt"; break;
+        }
+
+    // Считываем данные о товарах из файла категории
+    ifstream categoryFile(categoryFilename);
+
+    if (categoryFile.is_open()) {
+        Product product;
+        while (ReadProductFromFile(categoryFile, product)) {
+            cout << "----------------------------------------" << endl;
+            cout << "Название: " << product.name << endl;
+            cout << "Производитель: " << product.producer << endl;
+            cout << "Продавец: " << product.seller << endl;
+            cout << "Год выпуска: " << product.year << endl;
+            cout << "Описание: " << product.description << endl;
+            cout << "Доступное количество: " << product.availableAmount << endl;
+            cout << "Цена: " << product.price << endl;
+            cout << "----------------------------------------" << endl;
+
+            int quantity;
+            cout << "Введите количество товаров, которые хотите добавить в корзину (0 - пропустить): ";
+            cin >> quantity;
+            cin.ignore();
+
+            if (quantity > 0 && quantity <= product.availableAmount) {
+                // Добавляем товар в корзину
+                ofstream basketFile("Baskets/" + NAME + ".txt", ios::app);
+                if (basketFile.is_open()) {
+                    WriteProductToFile(basketFile, product);
+                    basketFile << quantity << endl; // Записываем количество товара
+                    basketFile << "-----" << endl; // Записываем разделитель
+                    basketFile.close();
                 }
                 else {
-                    cout << "Ошибка открытия файла корзины." << endl;
+                    cout << "Ошибка при открытии файла корзины!" << endl;
                 }
-                if (productRemoved) {
-                    // Удаляем товар из файла продавца, если количество равно 0
-                    DeleteProduct(category, product.name);
-                }
+
+                // Обновляем количество товара в файлах категории и продавца
+                UpdateProductAmount(categoryFilename, product, quantity);
+                UpdateProductAmount("Sellers/" + product.seller + ".txt", product, quantity);
+
+                cout << "Товар добавлен в корзину!" << endl;
             }
-            else {
-                cout << "Недостаточно товара на складе." << endl;
+            else if (quantity < 0) {
+                
             }
         }
+        categoryFile.close();
+        cout << "Товары в категории " << categoryChoice << " закончились." << endl;
     }
-    inCategories.close();
+    else {
+        
+    }
+
+    // Предлагаем пользователю выбрать другую категорию
+    char continueShopping;
+    cout << "Хотите посмотреть товары другой категории? (y/n): ";
+    cin >> continueShopping;
+    if (continueShopping == 'y') {
+        Shopping();
+    }
+    else {
+        Basket();
+    }
+}
+
+// Функция для работы с корзиной
+void Basket() {
+    string basketFilename = "Baskets/" + NAME + ".txt"; // Замените NAME на фактическое имя переменной
+    ifstream basketFile(basketFilename);
+
+    if (basketFile.is_open()) {
+        float totalCost = 0.0f; // Суммарная стоимость покупки
+
+        Product2 product;
+        string line;
+        while (getline(basketFile, line)) {
+            if (line != "-----") {
+                // Чтение данных о товаре из файла
+                    if (ReadProductFromFile2(basketFile, product)) {
+                        // Вывод информации о товаре
+                        cout << "----------------------------------------" << endl;
+                        cout << "Продавец: " << product.seller << endl;
+                        cout << "Название: " << product.name << endl;
+                        cout << "Производитель: " << product.producer << endl;
+                        cout << "Год выпуска: " << product.year << endl;
+                        cout << "Описание: " << product.description << endl;
+                        cout << "Цена: " << product.price << endl;
+                        cout << "Количество: " << product.quantity << endl; // Выводим количество товара из структуры
+                        cout << "----------------------------------------" << endl;
+
+                        // Подсчет стоимости товара
+                        float cost = product.price * product.quantity; // Используем количество из структуры
+                        totalCost += cost;
+
+                        // Предложение оплатить товар
+                        char payChoice;
+                        cout << "Оплатить этот товар? (y/n): ";
+                        cin >> payChoice;
+                        cin.ignore();
+
+                        if (payChoice == 'y') {
+                            // Оплата товара
+                            string city, street, house, entrance, apartment;
+                            cout << "Введите город: ";
+                            getline(cin, city);
+                            cout << "Введите улицу: ";
+                            getline(cin, street);
+                            cout << "Введите номер дома: ";
+                            getline(cin, house);
+                            cout << "Введите номер подъезда: ";
+                            getline(cin, entrance);
+                            cout << "Введите номер квартиры: ";
+                            getline(cin, apartment);
+
+                            // Проверка баланса
+                            if (BALANCE >= totalCost) { // Замените BALANCE на фактическое имя переменной с балансом
+                                // Списание средств с баланса
+                                BALANCE -= totalCost;
+                                cout << "Оплата прошла успешно!" << endl;
+                                cout << "Ваш адрес: " << city << ", " << street << ", " << house << ", " << entrance << ", " << apartment << endl;
+                            }
+                            else {
+                                // Недостаточно средств
+                                char choice;
+                                cout << "Недостаточно средств на балансе! Пополнить баланс (y/n) или отменить покупку? (y/n): ";
+                                cin >> choice;
+                                cin.ignore();
+                                if (choice == 'y') {
+                                    // Вызов функции пополнения баланса
+                                    // Balance(username);
+                                    // Повтор оплаты
+                                    Basket();
+                                }
+                                else {
+                                    cout << "Покупка отменена!" << endl;
+                                    return; // Выход из функции Basket
+                                }
+                            }
+                        }
+
+                        // Переход к следующему товару
+                        cout << endl; // Добавить пустую строку для разделения
+                    }
+            }
+            else {
+                // Следующий товар
+                cout << "-----" << endl;
+            }
+        }
+        basketFile.close();
+    }
+    // Shopping(); // Возможно, вам нужно добавить сюда вызов функции Shopping()
 }
